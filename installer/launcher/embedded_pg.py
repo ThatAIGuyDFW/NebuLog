@@ -13,7 +13,7 @@ import structlog
 
 from launcher.config import (
     PG_BIN_DIR, PG_DATA_DIR, PG_LOG, PG_PORT,
-    PG_USER, PG_DB, LOG_DIR,
+    PG_USER, PG_DB, LOG_DIR, DATA_DIR,
 )
 
 log = structlog.get_logger()
@@ -48,8 +48,11 @@ def initialize(password: str) -> None:
 
     PG_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Write password to temp file so it never appears on the command line
-    pw_file = PG_DATA_DIR / ".pwfile"
+    # Write the password file OUTSIDE pgdata.  initdb requires the target
+    # --pgdata directory to be empty; writing the pwfile inside it (as a prior
+    # version did) makes initdb fail with "directory exists but is not empty".
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    pw_file = DATA_DIR / ".initdb_pwfile"
     pw_file.write_text(password)
 
     try:
