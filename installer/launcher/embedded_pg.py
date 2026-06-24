@@ -183,7 +183,7 @@ def create_database(password: str) -> None:
         )
 
     _run(f"CREATE DATABASE {PG_DB};")
-    _run(f"CREATE EXTENSION IF NOT EXISTS vector;")
+    # No extensions needed — the schema uses the built-in gen_random_uuid().
     log.info("pg_database_ready", db=PG_DB)
 
 

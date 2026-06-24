@@ -58,9 +58,14 @@ async def _run_migrations() -> None:
     try:
         cfg = Config(str(db_dir / "alembic.ini"))
         cfg.set_main_option("script_location", str(db_dir))
+        # alembic.ini sets `version_locations = versions` (relative), which
+        # resolves against the process CWD (DATA_DIR), not the bundle — so the
+        # migration scripts are never found and nothing is applied.  Pin it to
+        # the absolute path inside the bundle.
+        cfg.set_main_option("version_locations", str(db_dir / "versions"))
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, alembic_command.upgrade, cfg, "head")
-        log.info("migrations_complete")
+        log.info("migrations_complete", script_location=str(db_dir))
     except Exception as exc:
         log.error("migrations_error", exc=str(exc))
 

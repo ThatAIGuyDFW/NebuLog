@@ -16,10 +16,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # --- Extensions ---
-    op.execute("CREATE EXTENSION IF NOT EXISTS pgvector")
-    op.execute("CREATE EXTENSION IF NOT EXISTS pg_partman SCHEMA partman")
-    op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+    # NOTE: No extensions are required.  UUID primary keys use the built-in
+    # gen_random_uuid() (PostgreSQL 13+), so neither uuid-ossp nor pgcrypto is
+    # needed.  pgvector and pg_partman are intentionally not used here — the
+    # embedded PostgreSQL shipped with the desktop installer does not include
+    # them, and the schema below does not depend on either.
 
     # --- Enums ---
     op.execute("""
@@ -57,7 +58,7 @@ def upgrade() -> None:
     # --- events (partitioned by received_at, monthly) ---
     op.execute("""
         CREATE TABLE events (
-            id              UUID            NOT NULL DEFAULT uuid_generate_v4(),
+            id              UUID            NOT NULL DEFAULT gen_random_uuid(),
             received_at     TIMESTAMPTZ     NOT NULL,
             event_time      TIMESTAMPTZ,
             source_host     TEXT            NOT NULL,
@@ -98,7 +99,7 @@ def upgrade() -> None:
     # --- sources ---
     op.create_table(
         "sources",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuid_generate_v4()")),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("ip_address", INET, nullable=False, unique=True),
         sa.Column("hostname", TEXT),
         sa.Column("source_type", sa.Enum("fortigate", "cisco_asa", "cisco_ios", "windows", "linux", name="source_type_enum", create_type=False), nullable=False),
@@ -113,7 +114,7 @@ def upgrade() -> None:
     # --- alert_rules ---
     op.create_table(
         "alert_rules",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuid_generate_v4()")),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("name", TEXT, nullable=False),
         sa.Column("description", TEXT),
         sa.Column("rule_type", sa.Enum("threshold", "sequence", "absence", "blacklist", "anomaly", name="rule_type_enum", create_type=False), nullable=False),
@@ -127,7 +128,7 @@ def upgrade() -> None:
     # --- alerts ---
     op.create_table(
         "alerts",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuid_generate_v4()")),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("rule_id", UUID(as_uuid=True), sa.ForeignKey("alert_rules.id"), nullable=False),
         sa.Column("severity", sa.Enum("critical", "high", "medium", "low", "info", name="severity_enum", create_type=False), nullable=False),
         sa.Column("status", sa.Enum("open", "acknowledged", "closed", name="alert_status_enum", create_type=False), nullable=False, server_default="'open'"),
@@ -150,7 +151,7 @@ def upgrade() -> None:
     # --- audit_log ---
     op.create_table(
         "audit_log",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuid_generate_v4()")),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("user_email", TEXT),
         sa.Column("action", TEXT, nullable=False),
         sa.Column("resource_type", TEXT),
