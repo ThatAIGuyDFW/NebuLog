@@ -3,11 +3,11 @@ name: Build Installers
 on:
   push:
     tags:
-      - "v*.*.*"          # trigger on version tags: v1.0.0, v1.2.3, etc.
-  workflow_dispatch:       # allow manual runs from the Actions tab
+      - "v*.*.*"
+  workflow_dispatch:
 
 permissions:
-  contents: write          # needed to create GitHub Releases
+  contents: write
 
 jobs:
   # ── Windows .exe ─────────────────────────────────────────────────────────────
@@ -25,6 +25,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
 
       - name: Install Python dependencies
         shell: pwsh
@@ -36,18 +38,54 @@ jobs:
           pip install -r workers/requirements.txt
           pip install -r correlation/requirements.txt
           pip install -r installer/requirements.txt
-          pip install pywin32
-          python Scripts/pywin32_postinstall.py -install
 
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Build (UI + deps + PyInstaller + Inno Setup)
+      - name: Install PostgreSQL 16 and copy binaries
         shell: pwsh
-        run: python installer/build.py --platform windows
+        run: |
+          choco install postgresql16 --no-progress -y --params '/Password:sentinel_build_ci'
+          $pgSrc = "C:\Program Files\PostgreSQL\16"
+          New-Item -ItemType Directory -Force installer\embedded\postgresql | Out-Null
+          Copy-Item "$pgSrc\bin"   installer\embedded\postgresql\bin   -Recurse -Force
+          Copy-Item "$pgSrc\lib"   installer\embedded\postgresql\lib   -Recurse -Force
+          Copy-Item "$pgSrc\share" installer\embedded\postgresql\share -Recurse -Force
+          Write-Host "PostgreSQL binaries staged."
 
-      - name: Upload Windows installer
+      - name: Download Redis for Windows
+        shell: pwsh
+        run: |
+          $ver = "5.0.14.1"
+          $url = "https://github.com/tporadowski/redis/releases/download/v$ver/Redis-x64-$ver.zip"
+          Invoke-WebRequest $url -OutFile redis.zip -UseBasicParsing
+          Expand-Archive redis.zip -DestinationPath redis_tmp -Force
+          New-Item -ItemType Directory -Force installer\embedded\redis | Out-Null
+          Copy-Item redis_tmp\redis-server.exe installer\embedded\redis\ -Force
+          Remove-Item redis.zip, redis_tmp -Recurse -Force
+          Write-Host "Redis binary staged."
+
+      - name: Build React UI
+        shell: pwsh
+        run: |
+          cd ui
+          npm ci
+          npm run build
+
+      - name: Run PyInstaller
+        shell: pwsh
+        run: |
+          python -m PyInstaller --clean installer/sentinel.spec
+
+      - name: Build Windows installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "iscc" }
+          & $iscc installer\windows\sentinel.iss
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: SentinelSetup-windows
@@ -69,6 +107,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
 
       - name: Install Python dependencies
         run: |
@@ -80,29 +120,35 @@ jobs:
           pip install -r correlation/requirements.txt
           pip install -r installer/requirements.txt
 
-      - name: Install build tools
+      - name: Install PostgreSQL 16 and Redis via Homebrew
         run: |
-          brew install upx 2>/dev/null || true   # optional compression
+          brew install postgresql@16 redis
+          PG_PREFIX=$(brew --prefix postgresql@16)
+          mkdir -p installer/embedded/postgresql/bin \
+                   installer/embedded/postgresql/lib \
+                   installer/embedded/postgresql/share
+          cp -r "$PG_PREFIX/bin/."   installer/embedded/postgresql/bin/
+          cp -r "$PG_PREFIX/lib/."   installer/embedded/postgresql/lib/
+          cp -r "$PG_PREFIX/share/." installer/embedded/postgresql/share/ 2>/dev/null || true
+          REDIS_PREFIX=$(brew --prefix redis)
+          mkdir -p installer/embedded/redis
+          cp "$REDIS_PREFIX/bin/redis-server" installer/embedded/redis/
+          echo "Dependencies staged."
 
-      - name: Build (UI + deps + PyInstaller + .pkg)
-        run: python installer/build.py --platform macos
-
-      - name: Sign & notarize (optional)
-        if: env.INSTALLER_SIGN_IDENTITY != ''
-        env:
-          INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      - name: Build React UI
         run: |
-          xcrun notarytool submit dist/SentinelSetup.pkg \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_PASSWORD" \
-            --wait
-          xcrun stapler staple dist/SentinelSetup.pkg
+          cd ui
+          npm ci
+          npm run build
 
-      - name: Upload macOS installer
+      - name: Run PyInstaller
+        run: |
+          python -m PyInstaller --clean installer/sentinel.spec
+
+      - name: Build macOS .pkg
+        run: bash installer/macos/build-pkg.sh
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: SentinelSetup-macos
@@ -124,13 +170,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
 
-      - name: Install system dependencies
+      - name: Install system build tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            ruby ruby-dev rubygems build-essential rpm \
-            upx-ucl patchelf
+            ruby ruby-dev rubygems build-essential rpm
           sudo gem install fpm --no-document
 
       - name: Install Python dependencies
@@ -143,17 +190,27 @@ jobs:
           pip install -r correlation/requirements.txt
           pip install -r installer/requirements.txt
 
-      - name: Build (UI + PyInstaller + .deb + .rpm)
-        run: python installer/build.py --platform linux
+      - name: Build React UI
+        run: |
+          cd ui
+          npm ci
+          npm run build
 
-      - name: Upload Linux .deb
+      - name: Run PyInstaller
+        run: |
+          python -m PyInstaller --clean installer/sentinel.spec
+
+      - name: Build Linux packages (.deb + .rpm)
+        run: bash installer/linux/build-packages.sh
+
+      - name: Upload .deb
         uses: actions/upload-artifact@v4
         with:
           name: sentinel-linux-deb
           path: dist/sentinel_*.deb
           retention-days: 30
 
-      - name: Upload Linux .rpm
+      - name: Upload .rpm
         uses: actions/upload-artifact@v4
         with:
           name: sentinel-linux-rpm
@@ -180,31 +237,19 @@ jobs:
 
             ### Downloads
 
-            | Platform | File | Description |
+            | Platform | File | Notes |
             |---|---|---|
-            | Windows 10/11 | `SentinelSetup.exe` | Self-contained installer |
-            | macOS 12+ | `SentinelSetup.pkg` | macOS package installer |
-            | Ubuntu/Debian | `sentinel_*_amd64.deb` | Debian package |
-            | RHEL/CentOS | `sentinel-*.x86_64.rpm` | RPM package |
-
-            ### What's included
-            - Embedded PostgreSQL 16 (Windows and macOS)
-            - Embedded Redis 7
-            - Pre-built React dashboard
-            - All Sentinel services (ingest, API, workers, correlation engine)
-            - First-time setup wizard
-            - System tray management (Windows/macOS)
-            - systemd service (Linux)
-
-            ### Requirements
-            - **Windows**: Windows 10 or later, 64-bit
-            - **macOS**: macOS Monterey (12.0) or later
-            - **Linux**: Ubuntu 22.04+, Debian 11+, RHEL/CentOS 8+, systemd
+            | Windows 10/11 (64-bit) | `SentinelSetup.exe` | Includes embedded PostgreSQL 16 + Redis |
+            | macOS 12+ | `SentinelSetup.pkg` | Includes embedded PostgreSQL 16 + Redis |
+            | Ubuntu / Debian | `sentinel_*_amd64.deb` | Requires `postgresql-16` + `redis` packages |
+            | RHEL / CentOS 8+ | `sentinel-*.x86_64.rpm` | Requires `postgresql` + `redis` packages |
 
             ### First-time setup
-            After installing, run the setup wizard to configure your database password and
-            optional Azure AD credentials. See the [README](https://github.com/ThatAIGuyDFW/NebuLog#readme)
-            for full instructions.
+            After installing, run the setup wizard (launches automatically on Windows/macOS)
+            or run `sentinel --setup` on Linux to configure your database password and
+            optional Azure AD credentials.
+
+            See the [README](https://github.com/ThatAIGuyDFW/NebuLog#readme) for full instructions.
           files: |
             dist/SentinelSetup-windows/SentinelSetup.exe
             dist/SentinelSetup-macos/SentinelSetup.pkg

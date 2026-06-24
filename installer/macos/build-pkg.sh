@@ -11,6 +11,8 @@
 #   bash installer/macos/build-pkg.sh
 
 set -euo pipefail
+# Prevent brew upgrade noise from aborting the script
+export HOMEBREW_NO_AUTO_UPDATE=1
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 APP_NAME="Sentinel"
@@ -138,14 +140,15 @@ XML
 
 FINAL_PKG="${OUTPUT_DIR}/SentinelSetup.pkg"
 
+# Create a minimal resources directory if one doesn't exist
+RESOURCES_DIR="${REPO_ROOT}/installer/macos/resources"
+mkdir -p "$RESOURCES_DIR"
+[ -f "$RESOURCES_DIR/welcome.html" ] || echo "<html><body><h2>Sentinel SIEM</h2></body></html>" > "$RESOURCES_DIR/welcome.html"
+
 productbuild \
     --distribution "$DIST_XML" \
     --package-path "$OUTPUT_DIR" \
-    --resources "${REPO_ROOT}/installer/macos/resources" \
-    "$FINAL_PKG" 2>/dev/null || \
-productbuild \
-    --distribution "$DIST_XML" \
-    --package-path "$OUTPUT_DIR" \
+    --resources "$RESOURCES_DIR" \
     "$FINAL_PKG"
 
 rm -f "$COMPONENT_PKG"
