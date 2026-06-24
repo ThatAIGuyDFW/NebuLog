@@ -46,10 +46,12 @@ jobs:
       - name: Stage PostgreSQL binaries
         shell: pwsh
         run: |
-          # GitHub Actions windows-latest runners ship with PostgreSQL pre-installed
-          $pgSrc = @("C:\Program Files\PostgreSQL\16","C:\Program Files\PostgreSQL\15") |
-                   Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $pgSrc) { Write-Error "PostgreSQL not found on runner"; exit 1 }
+          # Find the highest PostgreSQL version installed on this runner
+          $pgRoot = "C:\Program Files\PostgreSQL"
+          $pgSrc = Get-ChildItem $pgRoot -Directory -ErrorAction SilentlyContinue |
+                   Sort-Object { [int]$_.Name } -Descending |
+                   Select-Object -First 1 -ExpandProperty FullName
+          if (-not $pgSrc) { Write-Error "No PostgreSQL found under $pgRoot"; exit 1 }
           Write-Host "Using PostgreSQL at $pgSrc"
           New-Item -ItemType Directory -Force installer\embedded\postgresql | Out-Null
           Copy-Item "$pgSrc\bin"   installer\embedded\postgresql\bin   -Recurse -Force
