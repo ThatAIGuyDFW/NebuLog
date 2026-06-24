@@ -15,7 +15,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import NamedTuple
 
-from .config import (
+from launcher.config import (
     ENV_FILE, DATA_DIR, API_PORT, INGEST_UDP_PORT,
     INGEST_TCP_PORT, INGEST_API_PORT, REDIS_PORT, PG_PORT,
     PG_USER, PG_DB, UI_DIST_DIR, VERSION,
@@ -183,8 +183,8 @@ def write_env(r: SetupResult) -> None:
     """Write the .env file to DATA_DIR."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    from .embedded_pg import connection_url
-    from .embedded_redis import connection_url as redis_url
+    from launcher.embedded_pg import connection_url
+    from launcher.embedded_redis import connection_url as redis_url
 
     db_url = connection_url(r.db_password)
     redis = redis_url()

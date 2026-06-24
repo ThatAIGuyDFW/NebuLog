@@ -128,8 +128,8 @@ _HOOKS_DIR = ROOT / "installer" / "hooks"
 _HOOKS_PATH = [str(_HOOKS_DIR)] if _HOOKS_DIR.is_dir() else []
 
 a = Analysis(
-    [str(ROOT / "installer" / "launcher" / "main.py")],
-    pathex=[str(ROOT)],
+    [str(ROOT / "installer" / "sentinel_launcher.py")],
+    pathex=[str(ROOT), str(ROOT / "installer")],
     binaries=[],
     datas=DATAS,
     hiddenimports=HIDDEN_IMPORTS,

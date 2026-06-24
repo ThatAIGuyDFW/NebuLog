@@ -12,7 +12,7 @@ from typing import Callable
 
 import structlog
 
-from .config import DATA_DIR, LOG_DIR, ENV_FILE
+from launcher.config import DATA_DIR, LOG_DIR, ENV_FILE
 
 log = structlog.get_logger()
 

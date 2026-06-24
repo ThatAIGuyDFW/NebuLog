@@ -11,7 +11,7 @@ from pathlib import Path
 
 import structlog
 
-from .config import (
+from launcher.config import (
     PG_BIN_DIR, PG_DATA_DIR, PG_LOG, PG_PORT,
     PG_USER, PG_DB, LOG_DIR,
 )

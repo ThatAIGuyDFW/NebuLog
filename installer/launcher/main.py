@@ -38,8 +38,8 @@ def _parse_args() -> argparse.Namespace:
 
 def _first_run_setup() -> bool:
     """Run the setup wizard. Returns False if the user cancelled."""
-    from .setup_wizard import run_wizard, write_env
-    from .config import ENV_FILE
+    from launcher.setup_wizard import run_wizard, write_env
+    from launcher.config import ENV_FILE
 
     result = run_wizard()
     if result.cancelled:
@@ -49,7 +49,7 @@ def _first_run_setup() -> bool:
     write_env(result)
 
     # Initialise PostgreSQL cluster
-    from . import embedded_pg as pg
+    from launcher import embedded_pg as pg
     if not pg.is_initialized():
         pg.initialize(result.db_password)
 
@@ -60,9 +60,9 @@ def _first_run_setup() -> bool:
 
 def _startup(headless: bool = False) -> tuple:
     """Start embedded services and return (pg_proc, redis_proc, manager)."""
-    from .config import ENV_FILE, DATA_DIR, LOG_DIR
-    from . import embedded_pg as pg, embedded_redis as redis
-    from .process_manager import ProcessManager
+    from launcher.config import ENV_FILE, DATA_DIR, LOG_DIR
+    from launcher import embedded_pg as pg, embedded_redis as redis
+    from launcher.process_manager import ProcessManager
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -107,7 +107,7 @@ def _monitor_loop(manager, stop_event: threading.Event) -> None:
 # ── Headless mode ─────────────────────────────────────────────────────────────
 
 def _run_headless() -> None:
-    from . import embedded_pg as pg, embedded_redis as redis
+    from launcher import embedded_pg as pg, embedded_redis as redis
 
     pg_proc, redis_proc, manager = _startup(headless=True)
 
@@ -143,8 +143,8 @@ def _run_tray() -> None:
         _run_headless()
         return
 
-    from . import embedded_pg as pg, embedded_redis as redis
-    from .config import API_PORT
+    from launcher import embedded_pg as pg, embedded_redis as redis
+    from launcher.config import API_PORT
 
     pg_proc, redis_proc, manager = _startup()
 
@@ -169,7 +169,7 @@ def _run_tray() -> None:
         webbrowser.open(f"http://localhost:{API_PORT}")
 
     def _open_logs(icon, item):
-        from .config import LOG_DIR
+        from launcher.config import LOG_DIR
         import subprocess, platform
         if platform.system() == "Windows":
             subprocess.Popen(["explorer", str(LOG_DIR)])
@@ -219,7 +219,7 @@ def main() -> None:
 
     args = _parse_args()
 
-    from .config import ENV_FILE
+    from launcher.config import ENV_FILE
 
     # First-run or --setup
     if args.setup or not ENV_FILE.exists():

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import structlog
 
-from .config import REDIS_BIN, REDIS_PORT, REDIS_LOG, DATA_DIR, LOG_DIR
+from launcher.config import REDIS_BIN, REDIS_PORT, REDIS_LOG, DATA_DIR, LOG_DIR
 
 log = structlog.get_logger()
 
