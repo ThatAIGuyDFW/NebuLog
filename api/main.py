@@ -55,19 +55,26 @@ async def _run_migrations() -> None:
         if meipass:
             db_dir = Path(meipass) / "db"
 
+    versions_dir = db_dir / "versions"
+    if not versions_dir.is_dir():
+        log.error("migrations_versions_dir_missing", path=str(versions_dir))
+        return
+
     try:
         cfg = Config(str(db_dir / "alembic.ini"))
+        # Set an absolute script_location.  Alembic then finds migration scripts
+        # in <script_location>/versions via a plain path join (no string
+        # splitting), which is safe even when the install path contains spaces
+        # (e.g. C:\Program Files\Sentinel SIEM\...).  We deliberately do NOT set
+        # version_locations — alembic splits that option on spaces by default
+        # and would mis-parse such a path, silently finding zero migrations.
         cfg.set_main_option("script_location", str(db_dir))
-        # alembic.ini sets `version_locations = versions` (relative), which
-        # resolves against the process CWD (DATA_DIR), not the bundle — so the
-        # migration scripts are never found and nothing is applied.  Pin it to
-        # the absolute path inside the bundle.
-        cfg.set_main_option("version_locations", str(db_dir / "versions"))
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, alembic_command.upgrade, cfg, "head")
-        log.info("migrations_complete", script_location=str(db_dir))
+        log.info("migrations_complete", script_location=str(db_dir),
+                 versions=str(versions_dir))
     except Exception as exc:
-        log.error("migrations_error", exc=str(exc))
+        log.error("migrations_error", exc=repr(exc))
 
 
 @asynccontextmanager
