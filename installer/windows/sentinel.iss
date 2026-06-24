@@ -51,8 +51,6 @@ UninstallDisplayName={#MyAppName}
 
 ; Wizard appearance
 WizardStyle=modern
-WizardImageFile=..\assets\wizard-banner.bmp
-WizardSmallImageFile=..\assets\wizard-small.bmp
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

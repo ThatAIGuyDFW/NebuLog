@@ -43,11 +43,14 @@ jobs:
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Install PostgreSQL 16 and copy binaries
+      - name: Stage PostgreSQL binaries
         shell: pwsh
         run: |
-          choco install postgresql16 --no-progress -y --params '/Password:sentinel_build_ci'
-          $pgSrc = "C:\Program Files\PostgreSQL\16"
+          # GitHub Actions windows-latest runners ship with PostgreSQL pre-installed
+          $pgSrc = @("C:\Program Files\PostgreSQL\16","C:\Program Files\PostgreSQL\15") |
+                   Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $pgSrc) { Write-Error "PostgreSQL not found on runner"; exit 1 }
+          Write-Host "Using PostgreSQL at $pgSrc"
           New-Item -ItemType Directory -Force installer\embedded\postgresql | Out-Null
           Copy-Item "$pgSrc\bin"   installer\embedded\postgresql\bin   -Recurse -Force
           Copy-Item "$pgSrc\lib"   installer\embedded\postgresql\lib   -Recurse -Force
@@ -62,7 +65,9 @@ jobs:
           Invoke-WebRequest $url -OutFile redis.zip -UseBasicParsing
           Expand-Archive redis.zip -DestinationPath redis_tmp -Force
           New-Item -ItemType Directory -Force installer\embedded\redis | Out-Null
-          Copy-Item redis_tmp\redis-server.exe installer\embedded\redis\ -Force
+          $exe = Get-ChildItem redis_tmp -Recurse -Filter "redis-server.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error "redis-server.exe not found in zip"; exit 1 }
+          Copy-Item $exe.FullName installer\embedded\redis\redis-server.exe -Force
           Remove-Item redis.zip, redis_tmp -Recurse -Force
           Write-Host "Redis binary staged."
 
