@@ -50,6 +50,7 @@ def initialize(password: str) -> None:
                 "--auth", "md5",
             ],
             capture_output=True, text=True, timeout=120,
+            env=_pg_env(),
         )
         if result.returncode != 0:
             raise RuntimeError(f"initdb failed:\n{result.stderr}")
@@ -70,6 +71,20 @@ def initialize(password: str) -> None:
     log.info("pg_initialized", data_dir=str(PG_DATA_DIR))
 
 
+def _pg_env() -> dict[str, str]:
+    """Build an environment that lets the bundled postgres.exe find its own files."""
+    pg_root = PG_BIN_DIR.parent
+    return {
+        **os.environ,
+        "PGPASSWORD": "",
+        # Override compile-time paths so postgres finds share/ and lib/ inside bundle
+        "PGSHAREDIR": str(pg_root / "share"),
+        "PGLIBDIR": str(pg_root / "lib"),
+        # Prepend bin/ to PATH so postgres.exe loads its own DLLs first
+        "PATH": str(PG_BIN_DIR) + os.pathsep + os.environ.get("PATH", ""),
+    }
+
+
 def start() -> subprocess.Popen:
     """Start the PostgreSQL server and return its Popen handle."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -83,7 +98,7 @@ def start() -> subprocess.Popen:
         ],
         stdout=log_fh,
         stderr=log_fh,
-        env={**os.environ, "PGPASSWORD": ""},
+        env=_pg_env(),
     )
 
     # Wait until accepting connections (up to 30 s)
@@ -110,7 +125,7 @@ def stop(proc: subprocess.Popen) -> None:
 
 def create_database(password: str) -> None:
     """Create the sentinel database and user (idempotent)."""
-    env = {**os.environ, "PGPASSWORD": password, "PGPORT": str(PG_PORT)}
+    env = {**_pg_env(), "PGPASSWORD": password, "PGPORT": str(PG_PORT)}
     psql = _bin("psql")
 
     def _run(sql: str) -> None:
@@ -125,18 +140,11 @@ def create_database(password: str) -> None:
 
 
 def _ping() -> bool:
+    import socket
     try:
-        result = subprocess.run(
-            [
-                _bin("pg_isready"),
-                "-h", "127.0.0.1",
-                "-p", str(PG_PORT),
-                "-U", PG_USER,
-            ],
-            capture_output=True, timeout=5,
-        )
-        return result.returncode == 0
-    except Exception:
+        with socket.create_connection(("127.0.0.1", PG_PORT), timeout=1):
+            return True
+    except OSError:
         return False
 
 
