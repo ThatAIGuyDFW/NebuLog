@@ -79,6 +79,13 @@ def _startup(headless: bool = False) -> tuple:
             db_password = line.partition("=")[2].strip()
             break
 
+    # If setup ran but initdb failed (e.g. previous install with a bug),
+    # re-initialize the cluster now using the stored password rather than
+    # making the user run --setup again.
+    if not pg.is_initialized():
+        log.info("pg_cluster_missing_initializing")
+        pg.initialize(db_password)
+
     log.info("starting_embedded_redis")
     redis_proc = redis.start()
 
