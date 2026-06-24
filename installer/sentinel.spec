@@ -123,21 +123,22 @@ if EMBEDDED_REDIS.exists():
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 
+# Only include the custom hooks directory if it actually exists
+_HOOKS_DIR = ROOT / "installer" / "hooks"
+_HOOKS_PATH = [str(_HOOKS_DIR)] if _HOOKS_DIR.is_dir() else []
+
 a = Analysis(
     [str(ROOT / "installer" / "launcher" / "main.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=DATAS,
     hiddenimports=HIDDEN_IMPORTS,
-    hookspath=[str(ROOT / "installer" / "hooks")],
+    hookspath=_HOOKS_PATH,
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Don't bundle test frameworks
         "pytest", "pytest_asyncio",
-        # Dev tools
         "ipython", "jupyter",
-        # Docs
         "sphinx",
     ],
     win_no_prefer_redirects=False,
@@ -147,6 +148,19 @@ a = Analysis(
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
+
+# ── Icon — only set if the file actually exists (missing icon = hard error) ──
+
+def _resolve_icon() -> str | None:
+    if platform.system() == "Windows":
+        p = ROOT / "installer" / "assets" / "icon.ico"
+        return str(p) if p.exists() else None
+    if platform.system() == "Darwin":
+        p = ROOT / "installer" / "assets" / "icon.icns"
+        return str(p) if p.exists() else None
+    return None
+
+_icon_path = _resolve_icon()
 
 # ── Executable ────────────────────────────────────────────────────────────────
 
@@ -166,13 +180,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(ROOT / "installer" / "assets" / "icon.ico")
-    if platform.system() == "Windows"
-    else (
-        str(ROOT / "installer" / "assets" / "icon.icns")
-        if platform.system() == "Darwin"
-        else None
-    ),
+    icon=_icon_path,
 )
 
 coll = COLLECT(
@@ -191,7 +199,7 @@ if platform.system() == "Darwin":
     app = BUNDLE(
         coll,
         name="Sentinel.app",
-        icon=str(ROOT / "installer" / "assets" / "icon.icns"),
+        icon=_icon_path,
         bundle_identifier="com.nebula.sentinel",
         info_plist={
             "CFBundleShortVersionString": "1.0.0",

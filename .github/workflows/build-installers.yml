@@ -66,6 +66,22 @@ jobs:
           Remove-Item redis.zip, redis_tmp -Recurse -Force
           Write-Host "Redis binary staged."
 
+      - name: Generate placeholder icons
+        shell: pwsh
+        run: |
+          python -c "
+from PIL import Image, ImageDraw
+from pathlib import Path
+assets = Path('installer/assets')
+assets.mkdir(parents=True, exist_ok=True)
+img = Image.new('RGBA', (256, 256), (37, 99, 235, 255))
+d = ImageDraw.Draw(img)
+d.ellipse([20, 20, 236, 236], fill=(59, 130, 246, 255))
+d.text((95, 90), 'S', fill='white')
+img.save(str(assets / 'icon.ico'), format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])
+print('icon.ico generated')
+"
+
       - name: Build React UI
         shell: pwsh
         run: |
@@ -135,6 +151,31 @@ jobs:
           cp "$REDIS_PREFIX/bin/redis-server" installer/embedded/redis/
           echo "Dependencies staged."
 
+      - name: Generate placeholder icons
+        run: |
+          python -c "
+from PIL import Image, ImageDraw
+from pathlib import Path
+import subprocess, sys
+assets = Path('installer/assets')
+assets.mkdir(parents=True, exist_ok=True)
+img = Image.new('RGBA', (256, 256), (37, 99, 235, 255))
+d = ImageDraw.Draw(img)
+d.ellipse([20, 20, 236, 236], fill=(59, 130, 246, 255))
+d.text((95, 90), 'S', fill='white')
+png_path = str(assets / 'icon.png')
+img.save(png_path)
+# Build .icns using macOS sips + iconutil
+iconset = assets / 'icon.iconset'
+iconset.mkdir(exist_ok=True)
+for size in [16, 32, 64, 128, 256, 512]:
+    subprocess.run(['sips', '-z', str(size), str(size), png_path,
+                    '--out', str(iconset / f'icon_{size}x{size}.png')], check=True)
+subprocess.run(['iconutil', '-c', 'icns', str(iconset),
+                '-o', str(assets / 'icon.icns')], check=True)
+print('icon.icns generated')
+"
+
       - name: Build React UI
         run: |
           cd ui
@@ -189,6 +230,9 @@ jobs:
           pip install -r workers/requirements.txt
           pip install -r correlation/requirements.txt
           pip install -r installer/requirements.txt
+
+      - name: Create assets directory
+        run: mkdir -p installer/assets installer/hooks
 
       - name: Build React UI
         run: |
