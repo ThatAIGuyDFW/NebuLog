@@ -19,7 +19,26 @@ import sys
 import platform
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_submodules
+
 ROOT = Path(SPECPATH).parent  # repo root
+
+# Ensure the repo root is importable while this spec is evaluated, so
+# collect_submodules() below can discover the service packages regardless of
+# the current working directory.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# ── Service packages ──────────────────────────────────────────────────────────
+# The launcher starts these as subprocesses by passing their dotted module names
+# as strings (e.g. "api.main"), so PyInstaller's static analysis never sees an
+# import for them and would not bundle them.  Force-collect every submodule so
+# `sentinel.exe --run-module api.main` can find them at runtime.
+SERVICE_PACKAGES = ["api", "ingest", "workers", "correlation", "db"]
+SERVICE_SUBMODULES: list[str] = []
+for _pkg in SERVICE_PACKAGES:
+    if (ROOT / _pkg).is_dir():
+        SERVICE_SUBMODULES += collect_submodules(_pkg)
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 # These are modules that PyInstaller cannot detect via static analysis.
@@ -132,7 +151,7 @@ a = Analysis(
     pathex=[str(ROOT), str(ROOT / "installer")],
     binaries=[],
     datas=DATAS,
-    hiddenimports=HIDDEN_IMPORTS,
+    hiddenimports=HIDDEN_IMPORTS + SERVICE_SUBMODULES,
     hookspath=_HOOKS_PATH,
     hooksconfig={},
     runtime_hooks=[],
