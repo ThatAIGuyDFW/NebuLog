@@ -33,6 +33,19 @@ def is_initialized() -> bool:
 def initialize(password: str) -> None:
     """Run initdb to create a new PostgreSQL cluster."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # A previous build may have left a partially-initialised pgdata directory
+    # (initdb started then failed on bad bundle paths).  initdb refuses to run
+    # against a non-empty directory, so clear any leftover that is NOT a valid
+    # cluster.  Absence of PG_VERSION means there is no real data to lose.
+    if PG_DATA_DIR.exists():
+        if (PG_DATA_DIR / "PG_VERSION").exists():
+            log.info("pg_already_initialized_skipping", data_dir=str(PG_DATA_DIR))
+            return
+        if any(PG_DATA_DIR.iterdir()):
+            log.warning("pg_clearing_partial_cluster", data_dir=str(PG_DATA_DIR))
+            shutil.rmtree(PG_DATA_DIR)
+
     PG_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     # Write password to temp file so it never appears on the command line
