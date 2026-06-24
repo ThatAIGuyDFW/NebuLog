@@ -66,21 +66,9 @@ jobs:
           Remove-Item redis.zip, redis_tmp -Recurse -Force
           Write-Host "Redis binary staged."
 
-      - name: Generate placeholder icons
+      - name: Generate icons
         shell: pwsh
-        run: |
-          python -c "
-from PIL import Image, ImageDraw
-from pathlib import Path
-assets = Path('installer/assets')
-assets.mkdir(parents=True, exist_ok=True)
-img = Image.new('RGBA', (256, 256), (37, 99, 235, 255))
-d = ImageDraw.Draw(img)
-d.ellipse([20, 20, 236, 236], fill=(59, 130, 246, 255))
-d.text((95, 90), 'S', fill='white')
-img.save(str(assets / 'icon.ico'), format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])
-print('icon.ico generated')
-"
+        run: python installer/generate_icons.py
 
       - name: Build React UI
         shell: pwsh
@@ -91,10 +79,9 @@ print('icon.ico generated')
 
       - name: Run PyInstaller
         shell: pwsh
-        run: |
-          python -m PyInstaller --clean installer/sentinel.spec
+        run: python -m PyInstaller --clean installer/sentinel.spec
 
-      - name: Build Windows installer (Inno Setup)
+      - name: Build Windows installer
         shell: pwsh
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
@@ -138,11 +125,12 @@ print('icon.ico generated')
 
       - name: Install PostgreSQL 16 and Redis via Homebrew
         run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
           brew install postgresql@16 redis
           PG_PREFIX=$(brew --prefix postgresql@16)
-          mkdir -p installer/embedded/postgresql/bin \
-                   installer/embedded/postgresql/lib \
-                   installer/embedded/postgresql/share
+          mkdir -p installer/embedded/postgresql/bin
+          mkdir -p installer/embedded/postgresql/lib
+          mkdir -p installer/embedded/postgresql/share
           cp -r "$PG_PREFIX/bin/."   installer/embedded/postgresql/bin/
           cp -r "$PG_PREFIX/lib/."   installer/embedded/postgresql/lib/
           cp -r "$PG_PREFIX/share/." installer/embedded/postgresql/share/ 2>/dev/null || true
@@ -151,30 +139,8 @@ print('icon.ico generated')
           cp "$REDIS_PREFIX/bin/redis-server" installer/embedded/redis/
           echo "Dependencies staged."
 
-      - name: Generate placeholder icons
-        run: |
-          python -c "
-from PIL import Image, ImageDraw
-from pathlib import Path
-import subprocess, sys
-assets = Path('installer/assets')
-assets.mkdir(parents=True, exist_ok=True)
-img = Image.new('RGBA', (256, 256), (37, 99, 235, 255))
-d = ImageDraw.Draw(img)
-d.ellipse([20, 20, 236, 236], fill=(59, 130, 246, 255))
-d.text((95, 90), 'S', fill='white')
-png_path = str(assets / 'icon.png')
-img.save(png_path)
-# Build .icns using macOS sips + iconutil
-iconset = assets / 'icon.iconset'
-iconset.mkdir(exist_ok=True)
-for size in [16, 32, 64, 128, 256, 512]:
-    subprocess.run(['sips', '-z', str(size), str(size), png_path,
-                    '--out', str(iconset / f'icon_{size}x{size}.png')], check=True)
-subprocess.run(['iconutil', '-c', 'icns', str(iconset),
-                '-o', str(assets / 'icon.icns')], check=True)
-print('icon.icns generated')
-"
+      - name: Generate icons
+        run: python installer/generate_icons.py
 
       - name: Build React UI
         run: |
@@ -183,8 +149,7 @@ print('icon.icns generated')
           npm run build
 
       - name: Run PyInstaller
-        run: |
-          python -m PyInstaller --clean installer/sentinel.spec
+        run: python -m PyInstaller --clean installer/sentinel.spec
 
       - name: Build macOS .pkg
         run: bash installer/macos/build-pkg.sh
@@ -217,8 +182,7 @@ print('icon.icns generated')
       - name: Install system build tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            ruby ruby-dev rubygems build-essential rpm
+          sudo apt-get install -y --no-install-recommends ruby ruby-dev rubygems build-essential rpm
           sudo gem install fpm --no-document
 
       - name: Install Python dependencies
@@ -232,7 +196,7 @@ print('icon.icns generated')
           pip install -r installer/requirements.txt
 
       - name: Create assets directory
-        run: mkdir -p installer/assets installer/hooks
+        run: mkdir -p installer/assets
 
       - name: Build React UI
         run: |
@@ -241,10 +205,9 @@ print('icon.icns generated')
           npm run build
 
       - name: Run PyInstaller
-        run: |
-          python -m PyInstaller --clean installer/sentinel.spec
+        run: python -m PyInstaller --clean installer/sentinel.spec
 
-      - name: Build Linux packages (.deb + .rpm)
+      - name: Build Linux packages
         run: bash installer/linux/build-packages.sh
 
       - name: Upload .deb
@@ -285,8 +248,8 @@ print('icon.icns generated')
             |---|---|---|
             | Windows 10/11 (64-bit) | `SentinelSetup.exe` | Includes embedded PostgreSQL 16 + Redis |
             | macOS 12+ | `SentinelSetup.pkg` | Includes embedded PostgreSQL 16 + Redis |
-            | Ubuntu / Debian | `sentinel_*_amd64.deb` | Requires `postgresql-16` + `redis` packages |
-            | RHEL / CentOS 8+ | `sentinel-*.x86_64.rpm` | Requires `postgresql` + `redis` packages |
+            | Ubuntu / Debian | `sentinel_*_amd64.deb` | Requires postgresql-16 + redis packages |
+            | RHEL / CentOS 8+ | `sentinel-*.x86_64.rpm` | Requires postgresql + redis packages |
 
             ### First-time setup
             After installing, run the setup wizard (launches automatically on Windows/macOS)
