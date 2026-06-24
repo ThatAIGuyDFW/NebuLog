@@ -23,41 +23,36 @@ def upgrade() -> None:
     # them, and the schema below does not depend on either.
 
     # --- Enums ---
-    op.execute("""
-        CREATE TYPE source_type_enum AS ENUM (
-            'fortigate', 'cisco_asa', 'cisco_ios', 'windows', 'linux'
-        )
-    """)
-    op.execute("""
-        CREATE TYPE log_level_enum AS ENUM (
-            'emergency', 'alert', 'critical', 'error',
-            'warning', 'notice', 'info', 'debug'
-        )
-    """)
-    op.execute("""
-        CREATE TYPE category_enum AS ENUM (
-            'auth', 'network', 'endpoint', 'system', 'threat', 'compliance'
-        )
-    """)
-    op.execute("""
-        CREATE TYPE severity_enum AS ENUM (
-            'critical', 'high', 'medium', 'low', 'info'
-        )
-    """)
-    op.execute("""
-        CREATE TYPE alert_status_enum AS ENUM (
-            'open', 'acknowledged', 'closed'
-        )
-    """)
-    op.execute("""
-        CREATE TYPE rule_type_enum AS ENUM (
-            'threshold', 'sequence', 'absence', 'blacklist', 'anomaly'
-        )
-    """)
+    # PostgreSQL has no CREATE TYPE IF NOT EXISTS, so each enum is wrapped in a
+    # DO block that ignores duplicate_object.  This makes the migration safe to
+    # re-run if a previous attempt created the types but failed before creating
+    # the tables (leaving the database in a partially-migrated state).
+    def _create_enum(name: str, values: list[str]) -> None:
+        labels = ", ".join(f"'{v}'" for v in values)
+        op.execute(f"""
+            DO $$ BEGIN
+                CREATE TYPE {name} AS ENUM ({labels});
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$;
+        """)
+
+    _create_enum("source_type_enum",
+                 ["fortigate", "cisco_asa", "cisco_ios", "windows", "linux"])
+    _create_enum("log_level_enum",
+                 ["emergency", "alert", "critical", "error",
+                  "warning", "notice", "info", "debug"])
+    _create_enum("category_enum",
+                 ["auth", "network", "endpoint", "system", "threat", "compliance"])
+    _create_enum("severity_enum",
+                 ["critical", "high", "medium", "low", "info"])
+    _create_enum("alert_status_enum",
+                 ["open", "acknowledged", "closed"])
+    _create_enum("rule_type_enum",
+                 ["threshold", "sequence", "absence", "blacklist", "anomaly"])
 
     # --- events (partitioned by received_at, monthly) ---
     op.execute("""
-        CREATE TABLE events (
+        CREATE TABLE IF NOT EXISTS events (
             id              UUID            NOT NULL DEFAULT gen_random_uuid(),
             received_at     TIMESTAMPTZ     NOT NULL,
             event_time      TIMESTAMPTZ,
@@ -87,14 +82,14 @@ def upgrade() -> None:
     """)
     # Default partition to catch anything not matched by a specific month partition
     op.execute("""
-        CREATE TABLE events_default PARTITION OF events DEFAULT
+        CREATE TABLE IF NOT EXISTS events_default PARTITION OF events DEFAULT
     """)
     # Index on the parent table — inherited by partitions
-    op.execute("CREATE INDEX idx_events_received_at ON events (received_at)")
-    op.execute("CREATE INDEX idx_events_source_host ON events (source_host)")
-    op.execute("CREATE INDEX idx_events_src_ip ON events (src_ip)")
-    op.execute("CREATE INDEX idx_events_category ON events (category)")
-    op.execute("CREATE INDEX idx_events_alert_id ON events (alert_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_events_received_at ON events (received_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_events_source_host ON events (source_host)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_events_src_ip ON events (src_ip)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_events_category ON events (category)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_events_alert_id ON events (alert_id)")
 
     # --- sources ---
     op.create_table(
