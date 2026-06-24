@@ -9,18 +9,19 @@ Compliance-grade security event management with on-premises log ingest, Azure cl
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Prerequisites](#prerequisites)
-3. [Repository Layout](#repository-layout)
-4. [Local Development Setup](#local-development-setup)
-5. [Running the Services](#running-the-services)
-6. [Windows Agent Setup](#windows-agent-setup)
-7. [Linux Agent Setup](#linux-agent-setup)
-8. [Configuring Log Sources](#configuring-log-sources)
-9. [TLS Syslog (TCP 6514)](#tls-syslog-tcp-6514)
-10. [Production Deployment on Azure](#production-deployment-on-azure)
-11. [Azure AD Authentication](#azure-ad-authentication)
-12. [Verifying the Installation](#verifying-the-installation)
-13. [Environment Variable Reference](#environment-variable-reference)
+2. [Installation Options](#installation-options)
+3. [Prerequisites](#prerequisites)
+4. [Repository Layout](#repository-layout)
+5. [Local Development Setup](#local-development-setup)
+6. [Running the Services](#running-the-services)
+7. [Windows Agent Setup](#windows-agent-setup)
+8. [Linux Agent Setup](#linux-agent-setup)
+9. [Configuring Log Sources](#configuring-log-sources)
+10. [TLS Syslog (TCP 6514)](#tls-syslog-tcp-6514)
+11. [Production Deployment on Azure](#production-deployment-on-azure)
+12. [Azure AD Authentication](#azure-ad-authentication)
+13. [Verifying the Installation](#verifying-the-installation)
+14. [Environment Variable Reference](#environment-variable-reference)
 
 ---
 
@@ -112,6 +113,27 @@ Compliance-grade security event management with on-premises log ingest, Azure cl
 
 ---
 
+## Installation Options
+
+### Option A — Pre-built native installer (recommended)
+
+Download the installer for your platform from the [GitHub Releases page](https://github.com/ThatAIGuyDFW/NebuLog/releases):
+
+| Platform | File | Notes |
+|---|---|---|
+| Windows 10/11 64-bit | `SentinelSetup.exe` | Embedded PostgreSQL + Redis; runs as tray app or Windows Service |
+| macOS 12+ | `SentinelSetup.pkg` | Embedded PostgreSQL + Redis; LaunchAgent auto-start |
+| Ubuntu / Debian | `sentinel_*_amd64.deb` | Requires `postgresql-client` + `redis-tools`; systemd unit |
+| RHEL / CentOS 8+ | `sentinel-*.x86_64.rpm` | Requires `postgresql` + `redis` packages; systemd unit |
+
+After installing, a first-run setup wizard launches automatically (Windows/macOS) or run `sentinel --setup` (Linux) to set your database password and optional Azure AD credentials. No Docker, Python, or Node.js required.
+
+### Option B — Build from source (developers)
+
+Follow the [Local Development Setup](#local-development-setup) section below. Requires Python 3.12, Node.js 20, and Docker Desktop.
+
+---
+
 ## Prerequisites
 
 ### Required on the server running Sentinel
@@ -145,6 +167,9 @@ Compliance-grade security event management with on-premises log ingest, Azure cl
 
 ```
 sentinel/
+├── .github/
+│   └── workflows/
+│       └── build-installers.yml   CI matrix: Windows .exe, macOS .pkg, Linux .deb/.rpm
 ├── agents/
 │   ├── windows/        Windows Event Log agent (pywin32)
 │   └── linux/          journald / syslog tail agent + systemd unit
@@ -172,6 +197,16 @@ sentinel/
 │   ├── tls_listener.py RFC 5425 octet-count + newline framing
 │   ├── rate_limiter.py token bucket (eviction + drop logs)
 │   └── main.py         UDP 514 + TLS TCP 6514 + FastAPI 8001
+├── installer/
+│   ├── launcher/       PyInstaller entry point (embedded PG + Redis, tray, wizard)
+│   ├── windows/        Inno Setup 6 script → SentinelSetup.exe
+│   ├── macos/          pkgbuild/productbuild scripts → SentinelSetup.pkg
+│   ├── linux/          fpm scripts → sentinel.deb + sentinel.rpm
+│   ├── assets/         Generated icons (icon.ico, icon.icns, icon.png)
+│   ├── hooks/          PyInstaller hook stubs
+│   ├── generate_icons.py   Pillow-based icon generator (run before PyInstaller)
+│   ├── build.py        Local build helper (--skip-ui, --skip-deps flags)
+│   └── sentinel.spec   PyInstaller spec (windowed, embedded binaries)
 ├── tests/              229 unit and integration tests
 ├── ui/                 React 18 SPA
 ├── workers/
@@ -675,6 +710,7 @@ curl http://localhost:8000/rules
 | `LOG_LEVEL` | No | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `INGEST_NODE_NAME` | No | `ingest-01` | Node identifier stamped on every event |
 | `CORS_ORIGINS` | No | `http://localhost:3000` | Comma-separated allowed CORS origins |
+| `UI_DIST_PATH` | No | — | Absolute path to pre-built React UI `dist/` directory; when set, API serves the UI as static files (used by the native installer bundle) |
 
 ### Windows agent (`agents/windows/.env`)
 
