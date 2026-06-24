@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.auth import DEV_MODE
 from api.db import audit_pool, close_audit_pool, engine, init_audit_pool
@@ -227,3 +228,11 @@ app.include_router(rules.router)
 app.include_router(sources.router)
 app.include_router(dashboard.router)
 app.include_router(compliance.router)
+
+# ---------------------------------------------------------------------------
+# Static UI — served from the pre-built React bundle when running from the
+# installer bundle.  UI_DIST_PATH is set by the launcher's .env.
+# ---------------------------------------------------------------------------
+_UI_DIST = os.getenv("UI_DIST_PATH", "")
+if _UI_DIST and __import__("pathlib").Path(_UI_DIST).is_dir():
+    app.mount("/", StaticFiles(directory=_UI_DIST, html=True), name="ui")

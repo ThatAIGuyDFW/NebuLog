@@ -1,0 +1,10 @@
+# Installer / launcher dependencies
+# Install alongside the main service requirements before running build.py
+
+pystray>=0.19.5
+Pillow>=10.0.0
+pyinstaller>=6.5.0
+pyinstaller-hooks-contrib>=2024.0
+
+# Windows-only: pywin32 for service registration
+# Install manually on Windows: pip install pywin32
