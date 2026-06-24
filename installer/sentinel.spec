@@ -19,7 +19,7 @@ import sys
 import platform
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_all
 
 ROOT = Path(SPECPATH).parent  # repo root
 
@@ -41,6 +41,20 @@ SERVICE_SUBMODULES: list[str] = []
 for _pkg in SERVICE_PACKAGES:
     if (ROOT / _pkg / "__init__.py").is_file():
         SERVICE_SUBMODULES += collect_submodules(_pkg)
+
+# ── Compiled third-party packages ─────────────────────────────────────────────
+# asyncpg ships Cython extension modules (asyncpg.pgproto.pgproto,
+# asyncpg.protocol.protocol) that static analysis cannot see, producing
+# "No module named 'asyncpg.pgproto.pgproto'" at runtime.  collect_all gathers
+# every submodule plus the compiled .pyd binaries and any data files.
+_EXTRA_DATAS: list = []
+_EXTRA_BINARIES: list = []
+_EXTRA_HIDDEN: list[str] = []
+for _compiled_pkg in ["asyncpg"]:
+    _d, _b, _h = collect_all(_compiled_pkg)
+    _EXTRA_DATAS += _d
+    _EXTRA_BINARIES += _b
+    _EXTRA_HIDDEN += _h
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 # These are modules that PyInstaller cannot detect via static analysis.
@@ -151,9 +165,9 @@ _HOOKS_PATH = [str(_HOOKS_DIR)] if _HOOKS_DIR.is_dir() else []
 a = Analysis(
     [str(ROOT / "installer" / "sentinel_launcher.py")],
     pathex=[str(ROOT), str(ROOT / "installer")],
-    binaries=[],
-    datas=DATAS,
-    hiddenimports=HIDDEN_IMPORTS + SERVICE_SUBMODULES,
+    binaries=_EXTRA_BINARIES,
+    datas=DATAS + _EXTRA_DATAS,
+    hiddenimports=HIDDEN_IMPORTS + SERVICE_SUBMODULES + _EXTRA_HIDDEN,
     hookspath=_HOOKS_PATH,
     hooksconfig={},
     runtime_hooks=[],

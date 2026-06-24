@@ -56,7 +56,7 @@ class ProcessManager:
         """Load the .env file and merge with the OS environment."""
         env = dict(os.environ)
         if ENV_FILE.exists():
-            for line in ENV_FILE.read_text().splitlines():
+            for line in ENV_FILE.read_text(encoding="utf-8", errors="replace").splitlines():
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     k, _, v = line.partition("=")

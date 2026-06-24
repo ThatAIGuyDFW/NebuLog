@@ -58,6 +58,29 @@ def _first_run_setup() -> bool:
 
 # ── Startup sequence ──────────────────────────────────────────────────────────
 
+def _sanitize_env_file(env_file) -> None:
+    """Ensure the .env file is valid UTF-8.
+
+    Older installer versions wrote .env with the Windows default encoding
+    (cp1252), so an em-dash became byte 0x97.  python-dotenv reads .env as
+    UTF-8 and raises UnicodeDecodeError.  Re-encode such files to UTF-8 in
+    place so the services can read them.
+    """
+    try:
+        raw = env_file.read_bytes()
+    except OSError:
+        return
+    try:
+        raw.decode("utf-8")
+        return  # already valid UTF-8 — nothing to do
+    except UnicodeDecodeError:
+        pass
+    # cp1252 maps every byte, so this never fails; rewrite as UTF-8.
+    text = raw.decode("cp1252", errors="replace")
+    env_file.write_text(text, encoding="utf-8")
+    log.info("env_file_reencoded_utf8", path=str(env_file))
+
+
 def _startup(headless: bool = False) -> tuple:
     """Start embedded services and return (pg_proc, redis_proc, manager)."""
     from launcher.config import ENV_FILE, DATA_DIR, LOG_DIR
@@ -72,9 +95,12 @@ def _startup(headless: bool = False) -> tuple:
             "Sentinel is not configured. Run 'sentinel --setup' to complete setup."
         )
 
+    # Heal any legacy cp1252-encoded .env before anything reads it.
+    _sanitize_env_file(ENV_FILE)
+
     # Load the DB password from the env file (written by wizard)
     db_password = ""
-    for line in ENV_FILE.read_text().splitlines():
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
         if line.startswith("_SENTINEL_DB_PASSWORD="):
             db_password = line.partition("=")[2].strip()
             break
