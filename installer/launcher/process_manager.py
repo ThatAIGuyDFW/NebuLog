@@ -63,8 +63,16 @@ class ProcessManager:
                     env[k.strip()] = v.strip()
         return env
 
-    def _python(self) -> str:
-        return sys.executable
+    def _module_cmd(self, module: str) -> list[str]:
+        """Return the command list to run a Python module.
+
+        In a PyInstaller frozen bundle sys.executable is the launcher exe, not
+        Python.  We teach it to act as a module runner via --run-module so that
+        each service subprocess runs inside the same frozen environment.
+        """
+        if getattr(sys, "frozen", False):
+            return [sys.executable, "--run-module", module]
+        return [sys.executable, "-m", module]
 
     def start_all(self) -> None:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -78,7 +86,7 @@ class ProcessManager:
         log_fh = open(log_path, "a")
 
         svc.proc = subprocess.Popen(
-            [self._python(), "-m", svc.config.module],
+            self._module_cmd(svc.config.module),
             env=self._env,
             stdout=log_fh,
             stderr=log_fh,

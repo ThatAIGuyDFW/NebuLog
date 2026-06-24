@@ -43,23 +43,24 @@ _CORS_ORIGINS = os.getenv(
 
 async def _run_migrations() -> None:
     """Run Alembic migrations to head on startup (idempotent)."""
-    import subprocess
     import sys
     from pathlib import Path
+    from alembic.config import Config
+    from alembic import command as alembic_command
 
+    # Works from both the source tree and a PyInstaller frozen bundle.
     db_dir = Path(__file__).parent.parent / "db"
+    if not db_dir.is_dir():
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            db_dir = Path(meipass) / "db"
+
     try:
-        result = subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            cwd=str(db_dir),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode == 0:
-            log.info("migrations_complete", output=result.stdout.strip())
-        else:
-            log.error("migrations_failed", stderr=result.stderr.strip())
+        cfg = Config(str(db_dir / "alembic.ini"))
+        cfg.set_main_option("script_location", str(db_dir))
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, alembic_command.upgrade, cfg, "head")
+        log.info("migrations_complete")
     except Exception as exc:
         log.error("migrations_error", exc=str(exc))
 
@@ -236,3 +237,13 @@ app.include_router(compliance.router)
 _UI_DIST = os.getenv("UI_DIST_PATH", "")
 if _UI_DIST and __import__("pathlib").Path(_UI_DIST).is_dir():
     app.mount("/", StaticFiles(directory=_UI_DIST, html=True), name="ui")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "api.main:app",
+        host=os.getenv("API_HOST", "0.0.0.0"),
+        port=int(os.getenv("API_PORT", "8000")),
+        log_level="info",
+    )

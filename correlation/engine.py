@@ -188,3 +188,32 @@ class CorrelationEngine:
                 t.event_count, t.group_key,
             )
             log.info("alert_created", rule_id=str(t.rule_id), title=t.title)
+
+
+if __name__ == "__main__":
+    import asyncio
+    import os
+    import signal
+
+    async def _run() -> None:
+        # SQLAlchemy uses postgresql+asyncpg:// but asyncpg needs postgresql://
+        dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
+        engine = CorrelationEngine(dsn)
+        await engine.start()
+
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, stop.set)
+            except NotImplementedError:
+                pass  # Windows — handled via KeyboardInterrupt
+
+        try:
+            await stop.wait()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            await engine.stop()
+
+    asyncio.run(_run())
