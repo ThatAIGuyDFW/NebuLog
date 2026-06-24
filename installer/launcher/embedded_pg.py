@@ -85,8 +85,24 @@ def _pg_env() -> dict[str, str]:
     }
 
 
+def _log_tail(n: int = 30) -> str:
+    """Return the last n lines of the PostgreSQL log for error messages."""
+    try:
+        lines = PG_LOG.read_text(errors="replace").splitlines()
+        return "\n".join(lines[-n:])
+    except Exception as e:
+        return f"(could not read log: {e})"
+
+
 def start() -> subprocess.Popen:
     """Start the PostgreSQL server and return its Popen handle."""
+    if not is_initialized():
+        raise RuntimeError(
+            "PostgreSQL cluster not found. "
+            f"Expected data directory: {PG_DATA_DIR}\n"
+            "Run 'sentinel --setup' to initialise the database."
+        )
+
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_fh = open(PG_LOG, "a")
 
@@ -104,13 +120,28 @@ def start() -> subprocess.Popen:
     # Wait until accepting connections (up to 30 s)
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
+        # Detect immediate crash before the deadline expires
+        if proc.poll() is not None:
+            log_fh.flush()
+            raise RuntimeError(
+                f"PostgreSQL process exited immediately (code {proc.returncode}).\n"
+                f"postgres binary: {_bin('postgres')}\n"
+                f"Data directory:  {PG_DATA_DIR}\n"
+                f"Log ({PG_LOG}):\n{_log_tail()}"
+            )
         if _ping():
             log.info("pg_started", port=PG_PORT, pid=proc.pid)
             return proc
         time.sleep(0.5)
 
     proc.terminate()
-    raise RuntimeError("PostgreSQL did not start within 30 seconds")
+    log_fh.flush()
+    raise RuntimeError(
+        f"PostgreSQL did not start within 30 seconds.\n"
+        f"postgres binary: {_bin('postgres')}\n"
+        f"Data directory:  {PG_DATA_DIR}\n"
+        f"Log ({PG_LOG}):\n{_log_tail()}"
+    )
 
 
 def stop(proc: subprocess.Popen) -> None:
