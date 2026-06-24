@@ -1,0 +1,34 @@
+[Unit]
+Description=Sentinel SIEM Linux Agent
+Documentation=https://github.com/your-org/sentinel
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=sentinel
+Group=sentinel
+WorkingDirectory=/opt/sentinel-agent
+ExecStart=/opt/sentinel-agent/venv/bin/python -m agent
+Restart=on-failure
+RestartSec=10s
+
+# Load environment from .env file
+EnvironmentFile=/opt/sentinel-agent/.env
+
+# Harden the service
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sentinel
+PrivateTmp=yes
+CapabilityBoundingSet=
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sentinel-agent
+
+[Install]
+WantedBy=multi-user.target

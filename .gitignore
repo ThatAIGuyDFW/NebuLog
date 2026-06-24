@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.Python
+
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# MaxMind DB (binary, must be downloaded separately)
+*.mmdb
+
+# Node / UI
+ui/node_modules/
+ui/dist/
+ui/.vite/
+
+# Terraform state and local files
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/tfplan
+*.tfvars
+!infra/terraform.tfvars.example
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Archive fallback (local filesystem, not for source control)
+archive/
+
+# TLS certs (never commit private keys)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
