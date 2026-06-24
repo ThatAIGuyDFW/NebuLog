@@ -14,13 +14,13 @@ import os
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 
 from api.auth import DEV_MODE
 from api.db import audit_pool, close_audit_pool, engine, init_audit_pool
@@ -222,21 +222,35 @@ async def health(request: Request) -> JSONResponse:
 # ---------------------------------------------------------------------------
 # Routers
 # ---------------------------------------------------------------------------
+# When the pre-built UI is served from this same process (installer bundle),
+# there is no reverse proxy to strip an /api prefix, and the UI calls /api/*
+# (its default VITE_API_BASE_URL).  Mount the routers under /api in that case.
+# In a proxied deployment (Azure) UI_DIST_PATH is unset, so routers stay at root
+# and the ingress is responsible for the /api → root rewrite.
+# ---------------------------------------------------------------------------
+_UI_DIST = os.getenv("UI_DIST_PATH", "")
+_BUNDLED_UI = bool(_UI_DIST) and Path(_UI_DIST).is_dir()
+_API_PREFIX = "/api" if _BUNDLED_UI else ""
 
-app.include_router(events.router)
-app.include_router(alerts.router)
-app.include_router(rules.router)
-app.include_router(sources.router)
-app.include_router(dashboard.router)
-app.include_router(compliance.router)
+for _router in (events.router, alerts.router, rules.router,
+                sources.router, dashboard.router, compliance.router):
+    app.include_router(_router, prefix=_API_PREFIX)
 
 # ---------------------------------------------------------------------------
 # Static UI — served from the pre-built React bundle when running from the
-# installer bundle.  UI_DIST_PATH is set by the launcher's .env.
+# installer bundle.  UI_DIST_PATH is set by the launcher's .env.  A catch-all
+# route serves real files when they exist and otherwise falls back to
+# index.html so client-side routes (deep links / reloads) work.
 # ---------------------------------------------------------------------------
-_UI_DIST = os.getenv("UI_DIST_PATH", "")
-if _UI_DIST and __import__("pathlib").Path(_UI_DIST).is_dir():
-    app.mount("/", StaticFiles(directory=_UI_DIST, html=True), name="ui")
+if _BUNDLED_UI:
+    _UI_ROOT = Path(_UI_DIST)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def _spa_fallback(full_path: str) -> FileResponse:
+        candidate = _UI_ROOT / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_UI_ROOT / "index.html"))
 
 
 if __name__ == "__main__":
