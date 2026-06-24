@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 import structlog
 
@@ -196,7 +197,10 @@ def _ping() -> bool:
 
 
 def connection_url(password: str) -> str:
+    # Percent-encode the password so any special characters are safe inside the
+    # URL.  asyncpg and SQLAlchemy both decode this back to the real password.
+    pw = quote(password, safe="")
     return (
-        f"postgresql+asyncpg://{PG_USER}:{password}"
+        f"postgresql+asyncpg://{PG_USER}:{pw}"
         f"@127.0.0.1:{PG_PORT}/{PG_DB}"
     )

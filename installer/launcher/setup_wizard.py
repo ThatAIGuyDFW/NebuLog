@@ -31,7 +31,10 @@ class SetupResult(NamedTuple):
 
 
 def _random_password(length: int = 32) -> str:
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    # Use only RFC 3986 "unreserved" characters so the password can be embedded
+    # in a DATABASE_URL / DSN without percent-encoding.  Special characters like
+    # @ : # % & break asyncpg/SQLAlchemy URL parsing.
+    alphabet = string.ascii_letters + string.digits + "-_.~"
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 

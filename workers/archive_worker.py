@@ -135,7 +135,8 @@ class ArchiveWorker:
         self._ack_ids: list[str] = []
 
     async def run(self) -> None:
-        redis: Redis = from_url(self._redis_url, decode_responses=True)
+        # protocol=2 (RESP2): embedded Redis 5.0.x has no HELLO command.
+        redis: Redis = from_url(self._redis_url, decode_responses=True, protocol=2)
         await _ensure_consumer_group(redis)
         log.info("archive_worker_started", consumer=self._consumer_name)
 

@@ -23,7 +23,9 @@ class RedisPublisher:
 
     def __init__(self, redis_url: str, stream_normalized: str, stream_raw: str,
                  stream_errors: str) -> None:
-        self._redis: Redis = from_url(redis_url, decode_responses=True)
+        # protocol=2 (RESP2): the embedded Redis on Windows is 5.0.x, which
+        # predates the HELLO command used by RESP3 negotiation.
+        self._redis: Redis = from_url(redis_url, decode_responses=True, protocol=2)
         self._stream_normalized = stream_normalized
         self._stream_raw = stream_raw
         self._stream_errors = stream_errors

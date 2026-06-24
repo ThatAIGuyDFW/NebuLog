@@ -116,7 +116,8 @@ class StorageWorker:
         self._consumer_name = consumer_name
 
     async def run(self) -> None:
-        redis: Redis = from_url(self._redis_url, decode_responses=True)
+        # protocol=2 (RESP2): embedded Redis 5.0.x has no HELLO command.
+        redis: Redis = from_url(self._redis_url, decode_responses=True, protocol=2)
         await _ensure_consumer_group(redis)
 
         db: asyncpg.Connection = await asyncpg.connect(self._database_url)
