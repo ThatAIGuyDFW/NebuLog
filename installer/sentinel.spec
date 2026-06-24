@@ -34,10 +34,12 @@ if str(ROOT) not in sys.path:
 # as strings (e.g. "api.main"), so PyInstaller's static analysis never sees an
 # import for them and would not bundle them.  Force-collect every submodule so
 # `sentinel.exe --run-module api.main` can find them at runtime.
-SERVICE_PACKAGES = ["api", "ingest", "workers", "correlation", "db"]
+# (db/ is NOT a package — its Alembic scripts are bundled as data files and
+# loaded from the filesystem at runtime, so it is intentionally excluded.)
+SERVICE_PACKAGES = ["api", "ingest", "workers", "correlation"]
 SERVICE_SUBMODULES: list[str] = []
 for _pkg in SERVICE_PACKAGES:
-    if (ROOT / _pkg).is_dir():
+    if (ROOT / _pkg / "__init__.py").is_file():
         SERVICE_SUBMODULES += collect_submodules(_pkg)
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
