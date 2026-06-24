@@ -69,9 +69,10 @@ jobs:
           New-Item -ItemType Directory -Force installer\embedded\redis | Out-Null
           $exe = Get-ChildItem redis_tmp -Recurse -Filter "redis-server.exe" | Select-Object -First 1
           if (-not $exe) { Write-Error "redis-server.exe not found in zip"; exit 1 }
-          Copy-Item $exe.FullName installer\embedded\redis\redis-server.exe -Force
+          # Copy the entire directory (includes any DLLs redis-server.exe depends on)
+          Copy-Item "$($exe.DirectoryName)\*" installer\embedded\redis\ -Recurse -Force
           Remove-Item redis.zip, redis_tmp -Recurse -Force
-          Write-Host "Redis binary staged."
+          Write-Host "Redis binaries staged from $($exe.DirectoryName)"
 
       - name: Generate icons
         shell: pwsh

@@ -60,12 +60,11 @@ def stop(proc: subprocess.Popen) -> None:
 
 
 def _ping() -> bool:
+    import socket
     try:
-        result = subprocess.run(
-            [str(REDIS_BIN), "-p", str(REDIS_PORT), "ping"],
-            capture_output=True, timeout=3,
-        )
-        return b"PONG" in result.stdout
+        with socket.create_connection(("127.0.0.1", REDIS_PORT), timeout=1) as s:
+            s.sendall(b"PING\r\n")
+            return b"+PONG" in s.recv(128)
     except Exception:
         return False
 
